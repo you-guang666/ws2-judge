@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WS₂ 层数判定 — 明场显微RGB颜色区间</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --card: #ffffff;
+    --text: #2c2c2c;
+    --muted: #777;
+    --border: #e0e0d8;
+    --accent: #3a7bd5;
+    --warn: #c0392b;
+    --shadow: 0 2px 12px rgba(0,0,0,.06);
+    --radius: 10px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family: "Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  .app {
+    max-width: 700px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h1 .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); }
+  h2 { font-size:1rem; font-weight:600; margin-bottom:14px; color:#555; }
+
+  /* ---- Input ---- */
+  .input-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .input-group label { font-size:.8rem; font-weight:600; color:var(--muted); text-transform:uppercase; }
+  .input-group input[type=range] { width:140px; accent-color:var(--accent); }
+  .input-group input[type=number] {
+    width:64px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+    font-size:.95rem; text-align:center;
+  }
+  .swatch-preview {
+    width:56px; height:56px; border-radius:8px; border:2px solid var(--border);
+    margin-left:8px; transition: background .15s;
+  }
+  .btn {
+    padding: 10px 28px; border:none; border-radius:8px;
+    font-size:.95rem; font-weight:600; cursor:pointer;
+    background: var(--accent); color:#fff; transition: opacity .15s;
+  }
+  .btn:hover { opacity:.85; }
+
+  /* ---- Result ---- */
+  .result { margin-top:8px; }
+  .result .match {
+    padding: 16px; border-radius:8px;
+    border-left: 4px solid var(--accent); background:#f0f6ff;
+    display: flex; flex-direction:column; gap:6px;
+  }
+  .result .match .name { font-size:1.1rem; font-weight:700; }
+  .result .no-match {
+    padding: 16px; border-radius:8px;
+    border-left:4px solid var(--warn); background:#fff4f2;
+    color:var(--warn); font-weight:600;
+  }
+  .props { font-size:.85rem; color:var(--muted); line-height:1.5; }
+
+  /* ---- Reference table ---- */
+  .ref-grid {
+    display: flex; flex-direction:column; gap:6px;
+  }
+  .ref-row {
+    display: flex; align-items:center; gap:10px; padding:8px 10px;
+    border-radius:6px; background:#fafaf7; font-size:.82rem;
+    transition: background .15s;
+  }
+  .ref-row:hover { background:#f0f0e8; }
+  .ref-row .chip {
+    width:36px; height:36px; border-radius:6px; border:1px solid #ccc;
+    flex-shrink:0;
+  }
+  .ref-row .info { flex:1; line-height:1.4; }
+  .ref-row .info strong { font-size:.85rem; }
+  .ref-row .info span { color:var(--muted); font-size:.78rem; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ========== Header ========== -->
+  <div class="card">
+    <h1><span class="dot"></span>WS₂ 层数判定</h1>
+    <p style="color:var(--muted);font-size:.82rem;margin-top:4px;">
+      明场显微RGB颜色区间快速判定 — SiO₂/Si衬底机械剥离WS₂
+    </p>
+  </div>
+
+  <!-- ========== Input ========== -->
+  <div class="card">
+    <h2>输入样品 RGB</h2>
+    <div class="input-row">
+      <div class="input-group">
+        <label>R</label>
+        <input type="range" id="rSlider" min="0" max="255" value="120" oninput="syncInput('R')">
+        <input type="number" id="rNum" min="0" max="255" value="120" oninput="syncInput('R')">
+      </div>
+      <div class="input-group">
+        <label>G</label>
+        <input type="range" id="gSlider" min="0" max="255" value="130" oninput="syncInput('G')">
+        <input type="number" id="gNum" min="0" max="255" value="130" oninput="syncInput('G')">
+      </div>
+      <div class="input-group">
+        <label>B</label>
+        <input type="range" id="bSlider" min="0" max="255" value="150" oninput="syncInput('B')">
+        <input type="number" id="bNum" min="0" max="255" value="150" oninput="syncInput('B')">
+      </div>
+      <div class="swatch-preview" id="swatch" style="background:rgb(120,130,150)"></div>
+      <button class="btn" onclick="judge()">判 定</button>
+    </div>
+    <div class="result" id="result"></div>
+  </div>
+
+  <!-- ========== Reference ========== -->
+  <div class="card">
+    <h2>颜色区间参考（按判定优先级排列）</h2>
+    <div class="ref-grid" id="refGrid"></div>
+  </div>
+
+</div>
+
+<script>
+// =====================================================================
+//  WS₂ 颜色区间数据库（与MATLAB judgeWS2.m 完全一致）
+//  判断顺序: 0→1→2→3→4→5→6
+// =====================================================================
+const DB = [
+  {
+    name:'淡紫（空白SiO₂/Si衬底）',
+    R:[110,140], G:[95,125], B:[130,160],
+    layers:'0层', thick:'0 nm',
+    props:'空白衬底参考区；无WS₂样品'
+  },
+  {
+    name:'蓝青（单层WS₂  1L）',
+    R:[95,120], G:[95,125], B:[145,175],
+    layers:'1~2层', thick:'0.7~1.4 nm',
+    props:'直接带隙半导体；拉曼峰间距≈61 cm⁻¹；与衬底色差最小，易受噪声干扰'
+  },
+  {
+    name:'青绿（少层WS₂  2L）',
+    R:[100,125], G:[120,150], B:[135,165],
+    layers:'3~4层', thick:'2.1~2.8 nm',
+    props:'间接带隙半导体；绿色通道反射强度上升'
+  },
+  {
+    name:'浅青（多层WS₂  3~5L）',
+    R:[115,145], G:[140,175], B:[110,140],
+    layers:'5~6层', thick:'3.5~4.2 nm',
+    props:'实验最常见区间；绿光通道反射强度达到峰值'
+  },
+  {
+    name:'黄绿（厚层WS₂）',
+    R:[130,170], G:[110,190], B:[90,120],
+    layers:'6~15层', thick:'4.2~10.5 nm',
+    props:'厚层区间；体相特征逐步显现'
+  },
+  {
+    name:'橙黄（厚片WS₂）',
+    R:[170,200], G:[140,170], B:[70,100],
+    layers:'15~30层', thick:'10.5~21.0 nm',
+    props:'厚片体相WS₂；间接带隙'
+  },
+  {
+    name:'橙红（体相Bulk WS₂）',
+    R:[190,220], G:[110,140], B:[50,80],
+    layers:'>30层', thick:'>21.0 nm',
+    props:'体相WS₂；间接带隙；作为所有颜色区间对比基准'
+  }
+];
+
+// ===== 滑块/数字输入同步 =====
+function syncInput(ch) {
+  const sl = document.getElementById(ch.toLowerCase()+'Slider');
+  const nu = document.getElementById(ch.toLowerCase()+'Num');
+  if (document.activeElement === nu) {
+    sl.value = nu.value;
+  } else {
+    nu.value = sl.value;
+  }
+  updateSwatch();
+}
+
+function updateSwatch() {
+  const R = +document.getElementById('rNum').value;
+  const G = +document.getElementById('gNum').value;
+  const B = +document.getElementById('bNum').value;
+  document.getElementById('swatch').style.background = `rgb(${R},${G},${B})`;
+}
+
+// ===== 判定逻辑 =====
+function judge() {
+  const R = +document.getElementById('rNum').value;
+  const G = +document.getElementById('gNum').value;
+  const B = +document.getElementById('bNum').value;
+  const div = document.getElementById('result');
+
+  for (let i = 0; i < DB.length; i++) {
+    const z = DB[i];
+    if (R >= z.R[0] && R <= z.R[1] &&
+        G >= z.G[0] && G <= z.G[1] &&
+        B >= z.B[0] && B <= z.B[1]) {
+      div.innerHTML = `
+        <div class="match">
+          <div class="name">✅ ${z.name}</div>
+          <div><strong>匹配RGB区间:</strong> R[${z.R[0]},${z.R[1]}]  G[${z.G[0]},${z.G[1]}]  B[${z.B[0]},${z.B[1]}]</div>
+          <div><strong>输入RGB值:</strong> R=${R}  G=${G}  B=${B}</div>
+          <div><strong>对应层数:</strong> ${z.layers}</div>
+          <div><strong>物理厚度:</strong> ${z.thick}</div>
+          <div class="props"><strong>物性说明:</strong> ${z.props}</div>
+        </div>`;
+      return;
+    }
+  }
+
+  // 未匹配
+  div.innerHTML = `
+    <div class="no-match">
+      ⚠ RGB (${R}, ${G}, ${B}) 不在预设WS₂颜色区间内<br>
+      <span style="font-weight:400;font-size:.82rem;">
+      无法判定层数，请重新确认图像RGB数值。建议检查：是否在WS₂样品区域采样、光源色温与白平衡是否异常、可尝试相邻像素取平均以降低噪声。</span>
+    </div>`;
+}
+
+// ===== 渲染参考色块 =====
+function renderRefs() {
+  const grid = document.getElementById('refGrid');
+  let html = '';
+  DB.forEach(z => {
+    const Rmid = Math.round((z.R[0]+z.R[1])/2);
+    const Gmid = Math.round((z.G[0]+z.G[1])/2);
+    const Bmid = Math.round((z.B[0]+z.B[1])/2);
+    html += `
+      <div class="ref-row">
+        <div class="chip" style="background:rgb(${Rmid},${Gmid},${Bmid})"></div>
+        <div class="info">
+          <strong>${z.name}</strong><br>
+          <span>层数: ${z.layers}  |  厚度: ${z.thick}  |  RGB ${z.R[0]}~${z.R[1]}, ${z.G[0]}~${z.G[1]}, ${z.B[0]}~${z.B[1]}</span>
+        </div>
+      </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+// ===== 初始化 =====
+renderRefs();
+judge();  // 默认值判定一次
+</script>
+</body>
+</html>
